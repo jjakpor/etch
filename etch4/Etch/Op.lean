@@ -1,5 +1,5 @@
 import Etch.Basic
-
+/- Question: What is this Tagged class for? -/
 class Tagged (α : Type _) where
   tag : String
 
@@ -53,10 +53,10 @@ end String
 --attribute [irreducible] RMax
 
 structure Op (α : Type _) where
-  arity : ℕ
-  argTypes : Fin arity → Type
-  spec : ((n : Fin arity) → argTypes n) → α
-  opName : String
+  arity : ℕ -- The number of args
+  argTypes : Fin arity → Type -- A function that gives the type of an arg at a given position in the arg list
+  spec : ((n : Fin arity) → argTypes n) → α -- Essentially the definition of the operator. Takes in a function from an arg position to its type. Yields an alpha. Revisit
+  opName : String -- The name of the operator, but Question: how is this used?
 
 attribute [reducible] Op.argTypes
 attribute [simp] Op.spec

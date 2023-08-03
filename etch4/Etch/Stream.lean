@@ -6,39 +6,39 @@ import Etch.Basic
 --notation "𝟚"  => Bool
 
 -- marked irreducible later
-def Var (_ : Type _) := String
-abbrev ArrayVar (α : Type _) := Var (ℕ → α)
-def Var.mk : String → Var α := id
-def Var.toString : Var α → String := id
-instance : Coe String (Var α) := ⟨Var.mk⟩
+def Var (_ : Type _) := String -- A Var τ is just a string that corresponds to a variable of some type
+abbrev ArrayVar (α : Type _) := Var (ℕ → α) -- An ArrayVar is a string that corresponds to an array of elements of some type
+def Var.mk : String → Var α := id -- To make a Var α from a string, just use the string itself
+def Var.toString : Var α → String := id -- To represent a Var α, which is a string, as a string, just use its own self
+instance : Coe String (Var α) := ⟨Var.mk⟩ -- Call Var.mk whenever you see a String that needs to be treated as a Var α
 
-inductive E : Type → Type 1
-| call {α} (op : Op α) (args : (i : Fin op.arity) → E (op.argTypes i)) : E α
-| var    : (v : Var α) → E α
-| access : Var (ℕ → α) → E ℕ → E α
-| intLit : ℕ → E ℕ
-| strLit : String → E String
+inductive E : Type → Type 1 -- An expression can be:
+| call {α} (op : Op α) (args : (i : Fin op.arity) → E (op.argTypes i)) : E α -- a call to some user define operator on
+| var    : (v : Var α) → E α -- made from a variable of α. Then E depends on α
+| access : Var (ℕ → α) → E ℕ → E α -- An accsssion of a variable (think array) at some index.
+| intLit : ℕ → E ℕ -- An nat literal
+| strLit : String → E String -- A str literal
 
-def E.v (α) (v : String) : E α := E.var v
-abbrev Var.expr := @E.var
-abbrev Var.access := @E.access
+def E.v (α) (v : String) : E α := E.var v -- I guess just shorthand for the E.var constructor to make it easier to use
+abbrev Var.expr := @E.var -- Adding E.var constructor to Var namespace
+abbrev Var.access := @E.access -- Adding E.access constructor to Var namespace
 
 structure HeapContext where
-  store : Var α → α
-  heap {α : Type _} : Var (ℕ → α) → ℕ → α
+  store : Var α → α -- A way to represent a variable of type α on the heap
+  heap {α : Type _} : Var (ℕ → α) → ℕ → α -- The heap can be represented as an array of αs
 
 def E.eval (c : HeapContext) : E α → α
-| call f args => f.spec (λ i => (args i).eval c)
-| var v => c.store v
-| access arr arg => c.heap arr (arg.eval c)
-| intLit x => x
-| strLit x => x
+| call f args => f.spec (λ i => (args i).eval c) -- To evaluate an expression with an operator, eval the operator applied to the results of evaluating the operands
+| var v => c.store v -- Store variables on the heap
+| access arr arg => c.heap arr (arg.eval c) -- Access the heap array at the index you get by evaluating arg
+| intLit x => x -- Unbox natural numbers
+| strLit x => x -- Unbox strings
 
-instance : OfNat Bool (nat_lit 0) := ⟨ false ⟩
-instance : OfNat Bool (nat_lit 1) := ⟨ .true ⟩
-instance : Inhabited (E α) := ⟨.var "UNREACHABLE"⟩
-instance [Tagged α] [Add α] : Add (E α) := ⟨ λ a b => E.call .add ![a, b] ⟩
-instance [Tagged α] [Sub α] : Sub (E α) := ⟨ λ a b => E.call .sub ![a, b] ⟩
+instance : OfNat Bool (nat_lit 0) := ⟨ false ⟩ -- Let 0 be read as false
+instance : OfNat Bool (nat_lit 1) := ⟨ .true ⟩ -- Let 1 be read as true
+instance : Inhabited (E α) := ⟨.var "UNREACHABLE"⟩ -- The default expression is a variable called UNREACHABLE
+instance [Tagged α] [Add α] : Add (E α) := ⟨ λ a b => E.call .add ![a, b] ⟩  -- Adding two Es of α gives an expression that corresponds to calling the add Op on them
+instance [Tagged α] [Sub α] : Sub (E α) := ⟨ λ a b => E.call .sub ![a, b] ⟩  -- similar for subtraction, multiplication, and division etc.
 instance [Tagged α] [Mul α] : Mul (E α) := ⟨ λ a b => E.call .mul ![a, b] ⟩
 instance [Tagged α] [HDiv α α β] : HDiv (E α) (E α) (E β) := ⟨ fun a b => E.call .div ![a, b] ⟩
 instance [Tagged α] [Div α] : Div (E α) := ⟨ HDiv.hDiv ⟩
@@ -49,7 +49,7 @@ instance : OfNat (E ℕ) n := ⟨ .intLit n ⟩
 instance : Coe ℕ (E ℕ) := ⟨ .intLit ⟩
 instance : Coe String (E String) := ⟨ .strLit ⟩
 --def E.ext (f : String) : E Unit := E.call (O.voidCall f) ![]
-
+/- A compiler from E α to Expr, a representation of C expressions -/
 def E.compile : E α → Expr
 | @call _ op args => Expr.call op.opName $ List.ofFn λ i => E.compile (args i)
 | access base i => Expr.index (Expr.var base.toString) [i.compile]
@@ -65,7 +65,8 @@ infixr:40 " == " => λ a b => E.call Op.eq ![a, b]
 infixr:40 " != " => λ a b => E.call Op.neg ![(E.call Op.eq ![a, b])]
 infixr:40 " <= " => λ a b => E.call Op.le ![a, b]
 infixr:40 " >= " => λ a b => E.call Op.le ![b, a]
-
+/- A simple imperative programming language. Supports sequences of commands, while loops, 
+  if/else, skip, variable declaration, variable assignment, and assignmentin arrays-/
 inductive P
 | seq    : P → P → P
 | while  : E Bool → P → P
@@ -78,13 +79,13 @@ inductive P
 -- needs to come after P to avoid injectivity_lemma issue
 attribute [irreducible] Var
 
-instance : Inhabited P := ⟨.skip⟩
+instance : Inhabited P := ⟨.skip⟩ -- The default P program is a skip
 
 abbrev Var.store_var := @P.store_var
 abbrev Var.store_mem := @P.store_mem
 abbrev Var.decl := @P.decl
 
-def P.if1 := λ c t => P.branch c t P.skip
+def P.if1 := λ c t => P.branch c t P.skip -- Shorthand for if without else
 infixr:10 ";;" => P.seq
 
 def P.compile : P → Stmt
@@ -96,7 +97,7 @@ def P.compile : P → Stmt
 | store_var var e => Stmt.store (Expr.var var.toString) e.compile
 | store_mem v l r => Stmt.store (Expr.index (Expr.var v.toString) [l.compile]) r.compile
 
-def Name := List ℕ
+def Name := List ℕ -- Question: what is this?
 def Name.toString : Name → String := "_".intercalate ∘ List.map ToString.toString
 def Name.fresh (n : Name) (new : ℕ) : Name := new :: n
 def Name.freshen (n : Name) : Name := n.fresh 0
@@ -117,6 +118,48 @@ structure S (ι : Type _) (α : Type _) where
   init  : Name → P × σ
 
 infixr:25 " →ₛ " => S
+
+/- A representation of streams corresponding exactly to the indexed strem definition on p. 8 of Kovach et al-/
+structure SimpleS (ι : Type _) (R : Type _) where
+  σ     : Type
+  q₀    : σ 
+  index : σ → ι
+  value : σ → R
+  ready : σ → Bool
+  skip : σ → ι × Bool → σ 
+
+
+
+structure BSearchState (α : Type) where
+  arrInd : ℕ -- The index in the array we're examining (middle)
+  arrVal : α -- The value at the index we're looking at
+  lo     : ℕ -- The lower boundary index for the subarray under consideration
+  hi     : ℕ -- The upper boundary index for the subarray under consideration
+  searchIndex : ℕ
+
+def mid (lo hi : ℕ) : ℕ := hi - lo / 2
+
+/- A bsearch implementation sketch on SimpleS. 
+
+  This doesn't typecheck because Var.access returns an E.
+  
+  -/
+def bsearch [LT α] [BEq α] (is : ArrayVar α) (target : α) (lower upper : ℕ) : SimpleS ℕ ℕ where
+  σ := BSearchState α
+  q₀ := ⟨mid lower upper, is.access 0, lower, upper, 0⟩ 
+  index := fun q => q.searchIndex
+  value := fun q => is.access q.arrVal
+  ready := fun q => q.arrVal == target
+  skip := fun q (i, r) => 
+    if (q.searchIndex) <= i then 
+      if (is.access q.arrVal == target) then q
+      else if is.access q.arrVal < target then 
+        let newInd : ℕ := mid q.lo q.arrInd
+        ⟨newInd, is.access newInd, q.lo, q.arrInd - 1, q.searchIndex + 1⟩
+      else
+        let newInd : ℕ := mid q.arrInd q.hi
+        ⟨newInd, is.access newInd, q.arrInd + 1, q.hi, q.searchIndex + 1⟩
+    else q
 
 instance {ι α} [Inhabited α] : Inhabited (ι →ₛ α) where
   default := {
@@ -243,6 +286,7 @@ def S.predRangeIncl [One α] (lower upper : E ι) : S ι α where
   valid pos := pos.expr <= upper
   init  n   := let p := .fresh "pos" n; (p.decl lower, p)
 
+/--- Produces stream that uses the array `is` as an indexing source -/
 def S.interval [Zero ι] (h : IterMethod) (pos : Var ℕ) (lower upper : E ℕ) : S ι (E ℕ) where
   σ := Var ℕ × SkipState ι
   value   := fun ⟨pos, _⟩ => pos.expr
