@@ -136,30 +136,40 @@ structure BSearchState (α : Type) where
   lo     : ℕ -- The lower boundary index for the subarray under consideration
   hi     : ℕ -- The upper boundary index for the subarray under consideration
   searchIndex : ℕ
+deriving Repr
+def mid (lo hi : ℕ) : ℕ := (hi - lo) / 2
 
-def mid (lo hi : ℕ) : ℕ := hi - lo / 2
-
-/- A bsearch implementation sketch on SimpleS. 
-
-  This doesn't typecheck because Var.access returns an E.
   
-  -/
-def bsearch [LT α] [BEq α] (is : ArrayVar α) (target : α) (lower upper : ℕ) : SimpleS ℕ ℕ where
+def bsearch [LT α] [DecidableLT α] [BEq α] (is : Array α) (target : α): SimpleS ℕ /- but maybe should be (Fin ((Nat.log2 is.size) + 1))-/ ℕ where
   σ := BSearchState α
-  q₀ := ⟨mid lower upper, is.access 0, lower, upper, 0⟩ 
+  q₀ := 
+    let lower := 0
+    let upper := is.size - 1
+    ⟨mid lower upper, is[mid lower upper]'(by sorry), lower, upper, 0⟩ 
   index := fun q => q.searchIndex
-  value := fun q => is.access q.arrVal
+  value := fun q => q.arrInd
   ready := fun q => q.arrVal == target
   skip := fun q (i, r) => 
-    if (q.searchIndex) <= i then 
-      if (is.access q.arrVal == target) then q
-      else if is.access q.arrVal < target then 
-        let newInd : ℕ := mid q.lo q.arrInd
-        ⟨newInd, is.access newInd, q.lo, q.arrInd - 1, q.searchIndex + 1⟩
+    if (q.searchIndex) <= i && q.lo != q.hi && q.arrVal != target then -- I think this makes evaluation behavior correct for repeated entries
+      if q.arrVal < target then 
+        let newInd := mid q.lo q.arrInd
+        ⟨newInd, is[newInd]'(by sorry), q.lo, q.arrInd - 1, q.searchIndex + 1⟩
       else
         let newInd : ℕ := mid q.arrInd q.hi
-        ⟨newInd, is.access newInd, q.arrInd + 1, q.hi, q.searchIndex + 1⟩
+        ⟨newInd, is[newInd]'(by sorry), q.arrInd + 1, q.hi, q.searchIndex + 1⟩
     else q
+
+
+#eval (bsearch #[1, 2, 3, 4, 5] 3).value (bsearch #[1, 2, 3, 4, 5] 3).q₀
+def arrMatey := #[0, 2, 3, 4, 5]
+def pirateSearch : SimpleS ℕ ℕ := bsearch arrMatey 0
+-- def qe2 := ((bsearch arrMatey 1 0 4).skip (bsearch arrMatey 1 0 4).q₀ ((1 : Nat), false))
+#eval (pirateSearch.skip pirateSearch.q₀ (1, false))
+#eval pirateSearch.skip (pirateSearch.skip pirateSearch.q₀ (1, false)) (2, false) -- bleh, i'm having a lot of trouble working with this. might need convenience function
+
+/- We might not actually use the parameters like this. I'm just extracting the check so it's easier to see -/
+-- No that's not right. There is no i for valid. But I think I can still include target
+def simpleBSearchValid [BEq α] {target : α} {i : ℕ} (q : BSearchState α) : Bool := (q.searchIndex) <= i && q.lo != q.hi && q.arrVal != target
 
 instance {ι α} [Inhabited α] : Inhabited (ι →ₛ α) where
   default := {
