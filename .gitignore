@@ -10,3 +10,4 @@ TAGS
 etch4/build
 etch4/lean_packages
 etch4/gen*.c
+.DS_Store

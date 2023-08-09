@@ -128,48 +128,59 @@ structure SimpleS (ι : Type _) (R : Type _) where
   ready : σ → Bool
   skip : σ → ι × Bool → σ 
 
+section BSearchSec
+variable {α : Type} [LT α] [DecidableLT α] [Inhabited α] [BEq α]
+namespace BSearch
+  structure BSearchState (α : Type) where
+    arrInd : ℕ -- The index in the array we're examining (middle)
+    arrVal : α -- The value at the index we're looking at
+    lo     : ℕ -- The lower boundary index for the subarray under consideration
+    hi     : ℕ -- The upper boundary index for the subarray under consideration
+    searchIndex : ℕ
+  deriving Repr, BEq
+  def mid (lo hi : ℕ) : ℕ := lo + (hi - lo) / 2  
 
+  def searchSucc (is : Array α) (target : α) (q : BSearchState α) := 
+        if q.lo != q.hi && q.arrVal != target then -- I think this makes evaluation behavior correct for repeated entries
+          let temp :=
+            if target < q.arrVal then
+              let newInd := mid q.lo q.arrInd
+              ⟨newInd, is[newInd]!, q.lo, q.arrInd - 1, q.searchIndex⟩
+            else
+              let newInd : ℕ := mid q.arrInd q.hi
+              ⟨newInd, is[newInd]!, q.arrInd + 1, q.hi, q.searchIndex⟩ 
+          if (BEq.beq temp.arrVal target) then {temp with searchIndex := temp.searchIndex + 1} else temp
+        else q
 
-structure BSearchState (α : Type) where
-  arrInd : ℕ -- The index in the array we're examining (middle)
-  arrVal : α -- The value at the index we're looking at
-  lo     : ℕ -- The lower boundary index for the subarray under consideration
-  hi     : ℕ -- The upper boundary index for the subarray under consideration
-  searchIndex : ℕ
-deriving Repr
-def mid (lo hi : ℕ) : ℕ := (hi - lo) / 2
+  /- Helper function for `skip` (below) that skips from a state of index i to one of index j for i < j. 
+    Or, if j >= n where n is number of elements, the function goes as far as it can until it reaches a fixed point. -/
+  partial def skipTo (is : Array α) (target : α) (q : BSearchState α) (pred : BSearchState α) (i : ℕ) : BSearchState α:=
+    let q' := searchSucc is target q
+    if q.searchIndex < i && q' != pred then skipTo is target q' q i else q
 
-  
-def bsearch [LT α] [DecidableLT α] [BEq α] (is : Array α) (target : α): SimpleS ℕ /- but maybe should be (Fin ((Nat.log2 is.size) + 1))-/ ℕ where
-  σ := BSearchState α
-  q₀ := 
-    let lower := 0
-    let upper := is.size - 1
-    ⟨mid lower upper, is[mid lower upper]'(by sorry), lower, upper, 0⟩ 
-  index := fun q => q.searchIndex
-  value := fun q => q.arrInd
-  ready := fun q => q.arrVal == target
-  skip := fun q (i, r) => 
-    if (q.searchIndex) <= i && q.lo != q.hi && q.arrVal != target then -- I think this makes evaluation behavior correct for repeated entries
-      if q.arrVal < target then 
-        let newInd := mid q.lo q.arrInd
-        ⟨newInd, is[newInd]'(by sorry), q.lo, q.arrInd - 1, q.searchIndex + 1⟩
-      else
-        let newInd : ℕ := mid q.arrInd q.hi
-        ⟨newInd, is[newInd]'(by sorry), q.arrInd + 1, q.hi, q.searchIndex + 1⟩
+  /- Implementation of skip for `bSearch`-/
+  def skip (is : Array α) (target : α) (q : BSearchState α) (i : ℕ) (r : Bool) : BSearchState α :=
+    if i < q.searchIndex then skipTo is target q q i
+    else if BEq.beq i q.searchIndex then 
+      if !r then searchSucc is target q else skipTo is target q q (i + 1)
     else q
 
+  def bSearch  (is : Array α) (target : α): SimpleS ℕ /- but maybe should be (Fin ((Nat.log2 is.size) + 1))-/ ℕ where
+    σ := BSearchState α
+    q₀ := 
+      let upper := is.size - 1
+      ⟨mid 0 upper, is[mid 0 upper]!, 0, upper, 0⟩ 
+    index := fun q => q.searchIndex
+    value := fun q => q.arrInd
+    ready := fun q => q.arrVal == target
+    skip := fun q (i, r) => skip is target q i r
 
-#eval (bsearch #[1, 2, 3, 4, 5] 3).value (bsearch #[1, 2, 3, 4, 5] 3).q₀
-def arrMatey := #[0, 2, 3, 4, 5]
-def pirateSearch : SimpleS ℕ ℕ := bsearch arrMatey 0
--- def qe2 := ((bsearch arrMatey 1 0 4).skip (bsearch arrMatey 1 0 4).q₀ ((1 : Nat), false))
-#eval (pirateSearch.skip pirateSearch.q₀ (1, false))
-#eval pirateSearch.skip (pirateSearch.skip pirateSearch.q₀ (1, false)) (2, false) -- bleh, i'm having a lot of trouble working with this. might need convenience function
+  /- We might not actually use the parameters like this. I'm just extracting the check so it's easier to see -/
+  -- No that's not right. There is no i for valid. But I think I can still include target
+  def simpleBSearchValid [BEq α] {target : α} {i : ℕ} (q : BSearchState α) : Bool := (q.searchIndex) <= i && q.lo != q.hi && q.arrVal != target
+end BSearch
+end BSearchSec
 
-/- We might not actually use the parameters like this. I'm just extracting the check so it's easier to see -/
--- No that's not right. There is no i for valid. But I think I can still include target
-def simpleBSearchValid [BEq α] {target : α} {i : ℕ} (q : BSearchState α) : Bool := (q.searchIndex) <= i && q.lo != q.hi && q.arrVal != target
 
 instance {ι α} [Inhabited α] : Inhabited (ι →ₛ α) where
   default := {
