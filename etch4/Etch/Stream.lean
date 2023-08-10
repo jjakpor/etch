@@ -141,16 +141,16 @@ namespace BSearch
   def mid (lo hi : ℕ) : ℕ := lo + (hi - lo) / 2  
 
   def searchSucc (is : Array α) (target : α) (q : BSearchState α) := 
-        if q.lo != q.hi && q.arrVal != target then -- I think this makes evaluation behavior correct for repeated entries
-          let temp :=
-            if target < q.arrVal then
-              let newInd := mid q.lo q.arrInd
-              ⟨newInd, is[newInd]!, q.lo, q.arrInd - 1, q.searchIndex⟩
-            else
-              let newInd : ℕ := mid q.arrInd q.hi
-              ⟨newInd, is[newInd]!, q.arrInd + 1, q.hi, q.searchIndex⟩ 
-          if (BEq.beq temp.arrVal target) then {temp with searchIndex := temp.searchIndex + 1} else temp
-        else q
+    if q.lo != q.hi && q.arrVal != target then -- I think this makes evaluation behavior correct for repeated entries
+      let temp :=
+        if target < q.arrVal then
+          let newInd := mid q.lo q.arrInd
+          ⟨newInd, is[newInd]!, q.lo, q.arrInd - 1, q.searchIndex⟩
+        else
+          let newInd : ℕ := mid q.arrInd q.hi
+          ⟨newInd, is[newInd]!, q.arrInd + 1, q.hi, q.searchIndex⟩ 
+      if (BEq.beq temp.arrVal target) then {temp with searchIndex := temp.searchIndex + 1} else temp
+    else q
 
   /- Helper function for `skip` (below) that skips from a state of index i to one of index j for i < j. 
     Or, if j >= n where n is number of elements, the function goes as far as it can until it reaches a fixed point. -/
