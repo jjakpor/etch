@@ -140,6 +140,7 @@ namespace BSearch
   deriving Repr, BEq
   def mid (lo hi : ℕ) : ℕ := lo + (hi - lo) / 2  
 
+  /-- Gives a state corresponding to the next element to be examined in a binary search. Fixes at end of successful or unsuccessful search. -/
   def searchSucc (is : Array α) (target : α) (q : BSearchState α) := 
     if q.lo != q.hi && q.arrVal != target then -- I think this makes evaluation behavior correct for repeated entries
       let temp :=
@@ -154,17 +155,28 @@ namespace BSearch
 
   /- Helper function for `skip` (below) that skips from a state of index i to one of index j for i < j. 
     Or, if j >= n where n is number of elements, the function goes as far as it can until it reaches a fixed point. -/
-  partial def skipTo (is : Array α) (target : α) (q : BSearchState α) (pred : BSearchState α) (i : ℕ) : BSearchState α:=
+   def skipTo (is : Array α) (target : α) (q : BSearchState α) (pred : BSearchState α) (i : ℕ) : BSearchState α:=
     let q' := searchSucc is target q
     if q.searchIndex < i && q' != pred then skipTo is target q' q i else q
+   decreasing_by sorry
+    
 
-  /- Implementation of skip for `bSearch`-/
+  /-- Implementation of skip for `bSearch`-/
   def skip (is : Array α) (target : α) (q : BSearchState α) (i : ℕ) (r : Bool) : BSearchState α :=
-    if i < q.searchIndex then skipTo is target q q i
-    else if BEq.beq i q.searchIndex then 
-      if !r then searchSucc is target q else skipTo is target q q (i + 1)
+    if q.searchIndex < i then skipTo is target q q (i + if r then 1 else 0)
+    else if BEq.beq q.searchIndex i then 
+      if !r then searchSucc is target q else skipTo is target q q (i + 1) 
     else q
 
+
+/-
+    /-- Implementation of skip for `bSearch`-/
+  def skip (is : Array α) (target : α) (q : BSearchState α) (i : ℕ) (r : Bool) : BSearchState α :=
+    if q.searchIndex < i then skipTo is target q q (i + if r then 1 else 0) -- should I account for r here? I think so
+    else if BEq.beq q.searchIndex i then 
+      if !r then searchSucc is target q else skipTo is target q q (i + 1) -- why did I separate this logic? can this be the same as the first branch? if i make it <= i mean
+    else q
+-/
   def bSearch  (is : Array α) (target : α): SimpleS ℕ /- but maybe should be (Fin ((Nat.log2 is.size) + 1))-/ ℕ where
     σ := BSearchState α
     q₀ := 
@@ -175,9 +187,7 @@ namespace BSearch
     ready := fun q => q.arrVal == target
     skip := fun q (i, r) => skip is target q i r
 
-  /- We might not actually use the parameters like this. I'm just extracting the check so it's easier to see -/
-  -- No that's not right. There is no i for valid. But I think I can still include target
-  def simpleBSearchValid [BEq α] {target : α} {i : ℕ} (q : BSearchState α) : Bool := (q.searchIndex) <= i && q.lo != q.hi && q.arrVal != target
+
 end BSearch
 end BSearchSec
 

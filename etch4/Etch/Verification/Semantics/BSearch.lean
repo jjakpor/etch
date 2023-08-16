@@ -1,5 +1,6 @@
 import Etch.Verification.Semantics.SkipStream
 import Etch.Basic
+import Mathlib.Init.Algebra.Order
 
 /- This file is an attempt to prove that the BSearch stream is strictly lawful. -/
 
@@ -19,7 +20,7 @@ open Streams
 
 section BSearchSec
 
-variable {α : Type} [LT α] [DecidableLT α] [Inhabited α] [BEq α]
+variable {α : Type} [LT α] [DecidableLT α] [Inhabited α] [BEq α] [LawfulBEq α] [DecidableEq α]
 
   /-- A type representing a state in a binary search stream. -/
   structure BSearchState (α : Type) where
@@ -31,8 +32,9 @@ variable {α : Type} [LT α] [DecidableLT α] [Inhabited α] [BEq α]
   deriving Repr, BEq
   def mid (lo hi : ℕ) : ℕ := lo + (hi - lo) / 2  
 
+
   def searchSucc (is : Array α) (target : α) (q : BSearchState α) := 
-    if q.lo != q.hi && q.arrVal != target then -- I think this makes evaluation behavior correct for repeated entries
+    if q.lo ≠ q.hi ∧ q.arrVal ≠ target then -- I think this makes evaluation behavior correct for repeated entries
       let temp :=
         if target < q.arrVal then
           let newInd := mid q.lo q.arrInd
@@ -45,21 +47,23 @@ variable {α : Type} [LT α] [DecidableLT α] [Inhabited α] [BEq α]
 
   /-- Helper function for `skip` (below) that skips from a state of index i to one of index j for i < j. 
     Or, if j >= n where n is number of elements, the function goes as far as it can until it reaches a fixed point. -/
-  partial def skipTo (is : Array α) (target : α) (q : BSearchState α) (pred : BSearchState α) (i : ℕ) : BSearchState α:=
+  def skipTo (is : Array α) (target : α) (q : BSearchState α) (pred : BSearchState α) (i : ℕ) : BSearchState α:=
     let q' := searchSucc is target q
     if q.searchIndex < i && q' != pred then skipTo is target q' q i else q
+    decreasing_by sorry
 
   /- Implementation of skip for `bSearch`-/
  @[simp]
   def skip (is : Array α) (target : α) (q : BSearchState α) (i : ℕ) (r : Bool) : BSearchState α :=
-    if i < q.searchIndex then skipTo is target q q i
-    else if BEq.beq i q.searchIndex then 
+    if q.searchIndex < i then skipTo is target q q i
+    else if BEq.beq q.searchIndex i then 
       if !r then searchSucc is target q else skipTo is target q q (i + 1)
     else q
 
+
    /-- A stream representing a binary search on an array. -/
-  @[simps]
-  def bSearch(is : Array α) (target : α): Stream ℕ ℕ where
+
+  def bSearch (is : Array α) (target : α) : Stream ℕ ℕ where
     σ := BSearchState α
     index q _ := q.searchIndex
     value q _ := q.arrInd
@@ -67,17 +71,113 @@ variable {α : Type} [LT α] [DecidableLT α] [Inhabited α] [BEq α]
     skip q _ prod := skip is target q prod.fst prod.snd
     valid q := q.arrVal ≠ target ∧ searchSucc is target q ≠ q 
 
-end BSearchSec
+
+lemma search_succ_is_increasing (q : BSearchState α) (is : Array α) (target : α) : let search := bSearch is target
+  search.index' q ≤ search.index' (searchSucc is target q) := 
+  by
+    simp
+    unfold Stream.index'
+    split
+    -- Assume q is valid
+    rename Stream.valid (bSearch is target) q => h_valid
+    unfold Stream.index
+    unfold bSearch
+    simp
+    split
+    -- Assume succssor is also valid
+    rename ¬(searchSucc is target q).arrVal = target ∧ ¬searchSucc is target (searchSucc is target q) = searchSucc is target q => h_succ_valid
+    unfold bSearch at h_valid
+    simp at h_valid
+    unfold searchSucc
+    split
+    -- Assume the search is not yet done
+    rename q.lo ≠ q.hi ∧ q.arrVal ≠ target => not_done
+    split
+    -- Assume target < q.arrVal
+    simp
+    split
+    -- Assume curr = target. Then succ's index is q.searchIndex + 1. Close goal
+    simp
+    -- Now assume curr != target. Then succ's index = index. Close goal
+    simp
+
+    
+    rename ¬target < q.arrVal => tgt_ge_curr-- Now assume target >= arrval
+    simp
+    split -- Assume the next is equal to target
+    simp -- Then result's searchIndex is searchIndex + 1. Trivially close goal
+    simp -- Now assume is[mid q.arrInd q.hi]! ≠  target. Then searchIndex is unchanged
+
+    simp -- Now assume we're done with the search  ¬(q.lo ≠ q.hi ∧ q.arrVal ≠ target). Easy to show!
+    
+    simp -- Now assume successor is not valid. Any num is less than top?
+
+    rename ¬Stream.valid (bSearch is target) q => h_invalid
+    simp -- Want to show searchSucc is invalid
+    intro h_succ_valid
+    unfold bSearch at h_invalid
+    unfold bSearch at h_succ_valid
+    simp at *
+
+    have succ_invalid : ¬Stream.valid (bSearch is target) (searchSucc is target q) := by
+      have eq_or_ne : q.arrVal = target ∨ ¬q.arrVal = target  := Classical.em (q.arrVal = target)
+      cases eq_or_ne with
+      | inl => 
+        unfold bSearch
+        simp
+        rename q.arrVal = target => curr_eq_tgt
+        intro succ_ne_tgt
+        unfold searchSucc at succ_ne_tgt
+        split at succ_ne_tgt
+        rename q.lo ≠ q.hi ∧ q.arrVal ≠ target => not_done
+        exact absurd curr_eq_tgt not_done.right
+        contradiction
+      | inr => 
+        rename ¬q.arrVal = target => curr_ne_tgt
+        have fp : searchSucc is target q = q := h_invalid curr_ne_tgt
+        rw [fp] at h_succ_valid
+        have not_fp : searchSucc is target q ≠ q := h_succ_valid.right
+        exact absurd fp not_fp
+    unfold Stream.valid at succ_invalid
+    unfold bSearch at succ_invalid
+    simp at succ_invalid
+    exact absurd (succ_invalid h_succ_valid.left) h_succ_valid.right
+
+
+
 
 theorem bSearchIsMonotonic [LT α] [DecidableLT α] [Inhabited α] [BEq α] (is : Array α) (target : α) : (bSearch is target).IsMonotonic := by 
   intro q hv i
   simp
   -- how to break this if/then?
+  split
+  rename q.searchIndex < i.fst => indexLtI
+  unfold Stream.index'
+  split
+  rename Stream.valid (bSearch is target) q => hqValid
+  split
+  unfold skipTo
+  repeat simp
+  split
   sorry
+
+  -- hmm, maybe i need to prove that skipTo is increasing
+
+
+
+
+
+  
+    
+
+
+
+  
+  
   
 
-
-
+  
+  
 
 
 
