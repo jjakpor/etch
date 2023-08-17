@@ -20,7 +20,9 @@ open Streams
 
 section BSearchSec
 
-variable {α : Type} [LT α] [DecidableLT α] [Inhabited α] [BEq α] [LawfulBEq α] [DecidableEq α]
+variable {α : Type} 
+[LT α] [DecidableLT α] 
+[Inhabited α] [BEq α] [LawfulBEq α] [DecidableEq α]
 
   /-- A type representing a state in a binary search stream. -/
   structure BSearchState (α : Type) where
@@ -49,7 +51,7 @@ variable {α : Type} [LT α] [DecidableLT α] [Inhabited α] [BEq α] [LawfulBEq
     Or, if j >= n where n is number of elements, the function goes as far as it can until it reaches a fixed point. -/
   def skipTo (is : Array α) (target : α) (q : BSearchState α) (pred : BSearchState α) (i : ℕ) : BSearchState α:=
     let q' := searchSucc is target q
-    if q.searchIndex < i && q' != pred then skipTo is target q' q i else q
+    if q.searchIndex < i ∧ q' ≠ pred then skipTo is target q' q i else q
     decreasing_by sorry
 
   /- Implementation of skip for `bSearch`-/
@@ -57,7 +59,7 @@ variable {α : Type} [LT α] [DecidableLT α] [Inhabited α] [BEq α] [LawfulBEq
   def skip (is : Array α) (target : α) (q : BSearchState α) (i : ℕ) (r : Bool) : BSearchState α :=
     if q.searchIndex < i then skipTo is target q q i
     else if BEq.beq q.searchIndex i then 
-      if !r then searchSucc is target q else skipTo is target q q (i + 1)
+      if ¬r then searchSucc is target q else skipTo is target q q (i + 1)
     else q
 
 
@@ -142,6 +144,42 @@ lemma search_succ_is_increasing (q : BSearchState α) (is : Array α) (target : 
     unfold bSearch at succ_invalid
     simp at succ_invalid
     exact absurd (succ_invalid h_succ_valid.left) h_succ_valid.right
+
+
+lemma skip_to_succ_monotone (is : Array α) (target : α) (x : BSearchState α) (i : ℕ) : x.searchIndex ≤ (skipTo is target (searchSucc is target x) x i).searchIndex := by
+    unfold skipTo
+    simp
+    split
+    
+
+
+lemma skip_to_is_increasing (is : Array α) (target : α) (q : BSearchState α) (pred : BSearchState α) (i : ℕ) : let search := bSearch is target
+  search.index' q ≤ search.index' (skipTo is target q q i) := by
+  simp
+  unfold Stream.index'
+  split
+  rename Stream.valid (bSearch is target) q => h_valid
+  split
+  rename Stream.valid (bSearch is target) (skipTo is target q q i) => h_succ_valid
+  unfold skipTo
+  simp
+  split
+  rename q.searchIndex < i ∧ ¬searchSucc is target q = q => h_not_done_skipping
+  unfold bSearch
+  simp
+  
+
+
+  
+  
+  
+  
+  
+  
+  -- have : ∃x, (skipTo is target q q i) = searchSucc is target x := sorry -- how to show this?
+  -- maybe write an inductive proof like this https://leanprover.zulipchat.com/#narrow/stream/113489-new-members/topic/Guidance.20on.20proof.20methods.3A.20pattern.20matching.20vs.2E.20induction/near/384492767
+
+
 
 
 
