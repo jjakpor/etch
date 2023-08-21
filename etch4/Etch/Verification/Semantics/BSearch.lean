@@ -22,56 +22,53 @@ section BSearchSec
 
 variable {α : Type} 
 [LT α] [DecidableLT α] 
-[Inhabited α] [BEq α] [LawfulBEq α] [DecidableEq α]
+[Inhabited α] [DecidableEq α]
 
   /-- A type representing a state in a binary search stream. -/
   structure BSearchState (α : Type) where
     arrInd : ℕ -- The index in the array we're examining (middle)
-    arrVal : α -- The value at the index we're looking at
-    lo     : ℕ -- The lower boundary index for the subarray under consideration
-    hi     : ℕ -- The upper boundary index for the subarray under consideration
-    searchIndex : ℕ
+    is     : Array α -- The array ofindices
+    target : α -- The item to find
+    currLo : ℕ -- The lower boundary index for the subarray under consideration
+    currHi : ℕ -- The upper boundary index for the subarray under consideration
+    found  : Bool -- Represents whether the current search was successful
   deriving Repr, BEq
+
+  /-- Computes midpoint of two array indices. -/
   def mid (lo hi : ℕ) : ℕ := lo + (hi - lo) / 2  
 
-
-  def searchSucc (is : Array α) (target : α) (q : BSearchState α) := 
-    if q.lo ≠ q.hi ∧ q.arrVal ≠ target then -- I think this makes evaluation behavior correct for repeated entries
-      let temp :=
-        if target < q.arrVal then
-          let newInd := mid q.lo q.arrInd
-          ⟨newInd, is[newInd]!, q.lo, q.arrInd - 1, q.searchIndex⟩
-        else
-          let newInd : ℕ := mid q.arrInd q.hi
-          ⟨newInd, is[newInd]!, q.arrInd + 1, q.hi, q.searchIndex⟩ 
-      if (BEq.beq temp.arrVal target) then {temp with searchIndex := temp.searchIndex + 1} else temp
-    else q
-
-  /-- Helper function for `skip` (below) that skips from a state of index i to one of index j for i < j. 
-    Or, if j >= n where n is number of elements, the function goes as far as it can until it reaches a fixed point. -/
-  def skipTo (is : Array α) (target : α) (q : BSearchState α) (pred : BSearchState α) (i : ℕ) : BSearchState α:=
-    let q' := searchSucc is target q
-    if q.searchIndex < i ∧ q' ≠ pred then skipTo is target q' q i else q
-    decreasing_by sorry
-
-  /- Implementation of skip for `bSearch`-/
- @[simp]
-  def skip (is : Array α) (target : α) (q : BSearchState α) (i : ℕ) (r : Bool) : BSearchState α :=
-    if q.searchIndex < i then skipTo is target q q i
-    else if BEq.beq q.searchIndex i then 
-      if ¬r then searchSucc is target q else skipTo is target q q (i + 1)
-    else q
-
+  /-- Implementation of skip for binary search.
+  TODO: write further documentation
+  -/
+  def skip' (q : BSearchState α) (i : α) (r : Bool): BSearchState α :=
+    if i > q.target then -- Reset search
+      let midInd := mid q.currLo q.is.size - 1
+      ⟨midInd, q.is, i, q.currLo, q.is.size - 1, false⟩
+    else if i < q.target then q -- No-op
+    else if q.currLo <= q.currHi ∧ ¬q.found then  -- Continue search
+      if q.target < q.is[q.arrInd]! then 
+        let newInd := mid q.currLo q.arrInd
+        {q with arrInd := newInd, currHi := q.arrInd - 1}
+      else if q.target > q.is[q.arrInd]! then
+        let newInd := mid q.arrInd q.currHi
+        {q with arrInd := newInd, currLo := q.arrInd + 1}
+      else {q with found := true}
+    else -- We've found the target or gotten stuck
+      if r ∧ q.arrInd < q.is.size then 
+        -- Move on by scooting the low pointer past where the target would be if it exists
+        -- If the is are unique (which they are, right?), this means δ will trigger a search that will fail.
+        {q with currLo := q.arrInd + 1, found := false}
+      else
+        q
 
    /-- A stream representing a binary search on an array. -/
-
-  def bSearch (is : Array α) (target : α) : Stream ℕ ℕ where
+  def bSearch : Stream α ℕ where
     σ := BSearchState α
-    index q _ := q.searchIndex
+    index q _ := q.target
     value q _ := q.arrInd
-    ready q := q.arrVal == target
-    skip q _ prod := skip is target q prod.fst prod.snd
-    valid q := q.arrVal ≠ target ∧ searchSucc is target q ≠ q 
+    ready q := q.found
+    skip q _ prod := skip' q prod.fst prod.snd
+    valid q := q.arrInd < q.is.size
 
 
 lemma search_succ_is_increasing (q : BSearchState α) (is : Array α) (target : α) : let search := bSearch is target
