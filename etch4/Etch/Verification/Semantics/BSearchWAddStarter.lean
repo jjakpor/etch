@@ -21,8 +21,9 @@ open Streams
 section BSearchSec
 
 variable {α : Type} 
-[LT α] [DecidableLT α] 
+[Preorder α] 
 [Inhabited α] [DecidableEq α]
+[LinearOrder α][DecidableLT α]  
 
   /-- A type representing a state in a binary search stream. -/
   structure BSearchState (α : Type) where
@@ -55,9 +56,12 @@ variable {α : Type}
       else {q with found := true}
     else -- We've found the target or gotten stuck
       if r ∧ q.arrInd < q.is.size then 
-        -- Move on by scooting the low pointer past where the target would be if it exists
+        -- Move on by nudging the low pointer past where the target would be if it exists
         -- If the is are unique (which they are, right?), this means δ will trigger a search that will fail.
-        {q with currLo := q.arrInd + 1, found := false}
+        {q with 
+          arrInd := mid (q.arrInd + 1) (q.is.size - 1),
+           currLo := q.arrInd + 1, 
+           found := false}
       else
         q
 
@@ -69,6 +73,62 @@ variable {α : Type}
     ready q := q.found
     skip q _ prod := skip' q prod.fst prod.snd
     valid q := q.arrInd < q.is.size
+
+theorem bsearch_is_lawful (x : Stream α ℕ) : x = bSearch → x.IsLawful := 
+
+
+theorem bsearch_is_monotonic (x : Stream α ℕ) : x = bSearch → x.IsMonotonic := by
+  intro hx
+  rw [hx]
+  unfold Stream.IsMonotonic
+  intros q hq i
+
+  unfold Stream.index'
+  split
+  rename  Stream.valid bSearch q => h_q_valid
+  split
+  rename Stream.valid bSearch (Stream.skip bSearch q hq i) => h_skip_valid
+  unfold Stream.index
+  simp
+  unfold Stream.skip
+  unfold bSearch
+  simp
+  unfold skip'
+  simp
+  split
+  simp
+  rename q.target < i.fst => h_lt
+  have : q.target ≤ i.fst := le_of_lt h_lt
+  have : WithTop.some q.target ≤ WithTop.some i.fst := (@WithTop.coe_le_coe α q.target i.fst).mpr this
+  exact this
+
+
+  
+ 
+
+
+  
+
+
+
+
+  
+
+
+ 
+
+
+  
+
+
+
+
+
+
+
+
+
+
 
 
 lemma search_succ_is_increasing (q : BSearchState α) (is : Array α) (target : α) : let search := bSearch is target
@@ -141,81 +201,6 @@ lemma search_succ_is_increasing (q : BSearchState α) (is : Array α) (target : 
     unfold bSearch at succ_invalid
     simp at succ_invalid
     exact absurd (succ_invalid h_succ_valid.left) h_succ_valid.right
-
-
-lemma skip_to_succ_monotone (is : Array α) (target : α) (x : BSearchState α) (i : ℕ) : x.searchIndex ≤ (skipTo is target (searchSucc is target x) x i).searchIndex := by
-    unfold skipTo
-    simp
-    split
-    
-
-
-lemma skip_to_is_increasing (is : Array α) (target : α) (q : BSearchState α) (pred : BSearchState α) (i : ℕ) : let search := bSearch is target
-  search.index' q ≤ search.index' (skipTo is target q q i) := by
-  simp
-  unfold Stream.index'
-  split
-  rename Stream.valid (bSearch is target) q => h_valid
-  split
-  rename Stream.valid (bSearch is target) (skipTo is target q q i) => h_succ_valid
-  unfold skipTo
-  simp
-  split
-  rename q.searchIndex < i ∧ ¬searchSucc is target q = q => h_not_done_skipping
-  unfold bSearch
-  simp
-  
-
-
-  
-  
-  
-  
-  
-  
-  -- have : ∃x, (skipTo is target q q i) = searchSucc is target x := sorry -- how to show this?
-  -- maybe write an inductive proof like this https://leanprover.zulipchat.com/#narrow/stream/113489-new-members/topic/Guidance.20on.20proof.20methods.3A.20pattern.20matching.20vs.2E.20induction/near/384492767
-
-
-
-
-
-
-theorem bSearchIsMonotonic [LT α] [DecidableLT α] [Inhabited α] [BEq α] (is : Array α) (target : α) : (bSearch is target).IsMonotonic := by 
-  intro q hv i
-  simp
-  -- how to break this if/then?
-  split
-  rename q.searchIndex < i.fst => indexLtI
-  unfold Stream.index'
-  split
-  rename Stream.valid (bSearch is target) q => hqValid
-  split
-  unfold skipTo
-  repeat simp
-  split
-  sorry
-
-  -- hmm, maybe i need to prove that skipTo is increasing
-
-
-
-
-
-  
-    
-
-
-
-  
-  
-  
-
-  
-  
-
-
-
 
 
 
