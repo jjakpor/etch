@@ -150,9 +150,6 @@ theorem bsearch_is_strict_mono : (bSearch α).IsStrictMono := by
           contradiction
       . contradiction
     . simp
-    
-      
-
 
       
       
