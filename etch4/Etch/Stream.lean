@@ -130,66 +130,76 @@ structure SimpleS (ι : Type _) (R : Type _) where
 
 section BSearchSec
 variable {α : Type} [LT α] [DecidableLT α] [Inhabited α] [BEq α]
-namespace BSearch
+variable {α : Type} 
+[LT α] [DecidableLT α] 
+[Inhabited α] [DecidableEq α]
+
+  /-- A type representing a state in a binary search stream. -/
   structure BSearchState (α : Type) where
     arrInd : ℕ -- The index in the array we're examining (middle)
-    arrVal : α -- The value at the index we're looking at
-    lo     : ℕ -- The lower boundary index for the subarray under consideration
-    hi     : ℕ -- The upper boundary index for the subarray under consideration
-    searchIndex : ℕ
+    is     : Array α -- The array ofindices
+    target : α -- The item to find
+    currLo : ℕ -- The lower boundary index for the subarray under consideration
+    currHi : ℕ -- The upper boundary index for the subarray under consideration
+    found  : Bool -- Represents whether the current search was successful
   deriving Repr, BEq
+
+  /-- Computes midpoint of two array indices. -/
   def mid (lo hi : ℕ) : ℕ := lo + (hi - lo) / 2  
 
-  /-- Gives a state corresponding to the next element to be examined in a binary search. Fixes at end of successful or unsuccessful search. -/
-  def searchSucc (is : Array α) (target : α) (q : BSearchState α) := 
-    if q.lo != q.hi && q.arrVal != target then -- I think this makes evaluation behavior correct for repeated entries
-      let temp :=
-        if target < q.arrVal then
-          let newInd := mid q.lo q.arrInd
-          ⟨newInd, is[newInd]!, q.lo, q.arrInd - 1, q.searchIndex⟩
-        else
-          let newInd : ℕ := mid q.arrInd q.hi
-          ⟨newInd, is[newInd]!, q.arrInd + 1, q.hi, q.searchIndex⟩ 
-      if (BEq.beq temp.arrVal target) then {temp with searchIndex := temp.searchIndex + 1} else temp
-    else q
+  /-- Implementation of skip for binary search.
+  TODO: write further documentation
+  -/
+  def skip' (q : BSearchState α) (i : α) (r : Bool): BSearchState α :=
+    if i > q.target then -- Reset search
+      let midInd := mid q.currLo q.is.size - 1
+      ⟨midInd, q.is, i, q.currLo, q.is.size - 1, false⟩
+    else if i < q.target then q -- No-op
+    else if q.currLo <= q.currHi ∧ ¬q.found then  -- Continue search
+      if q.target < q.is[q.arrInd]! then 
+        let newInd := mid q.currLo q.arrInd
+        {q with arrInd := newInd, currHi := q.arrInd - 1}
+      else if q.target > q.is[q.arrInd]! then
+        let newInd := mid q.arrInd q.currHi
+        {q with arrInd := newInd, currLo := q.arrInd + 1}
+      else {q with found := true}
+    else -- We've found the target or gotten stuck
+      if r ∧ q.arrInd < q.is.size then 
+        -- Move on by scooting the low pointer past where the target would be if it exists
+        -- If the is are unique (which they are, right?), this means δ will trigger a search that will fail.
+        {q with arrInd := mid (q.arrInd + 1) (q.is.size - 1), currLo := q.arrInd + 1, found := false}
+      else
+        q
 
-  /- Helper function for `skip` (below) that skips from a state of index i to one of index j for i < j. 
-    Or, if j >= n where n is number of elements, the function goes as far as it can until it reaches a fixed point. -/
-   def skipTo (is : Array α) (target : α) (q : BSearchState α) (pred : BSearchState α) (i : ℕ) : BSearchState α:=
-    let q' := searchSucc is target q
-    if q.searchIndex < i && q' != pred then skipTo is target q' q i else q
-   decreasing_by sorry
-    
-
-  /-- Implementation of skip for `bSearch`-/
-  def skip (is : Array α) (target : α) (q : BSearchState α) (i : ℕ) (r : Bool) : BSearchState α :=
-    if q.searchIndex < i then skipTo is target q q (i + if r then 1 else 0)
-    else if BEq.beq q.searchIndex i then 
-      if !r then searchSucc is target q else skipTo is target q q (i + 1) 
-    else q
-
-
-/-
-    /-- Implementation of skip for `bSearch`-/
-  def skip (is : Array α) (target : α) (q : BSearchState α) (i : ℕ) (r : Bool) : BSearchState α :=
-    if q.searchIndex < i then skipTo is target q q (i + if r then 1 else 0) -- should I account for r here? I think so
-    else if BEq.beq q.searchIndex i then 
-      if !r then searchSucc is target q else skipTo is target q q (i + 1) -- why did I separate this logic? can this be the same as the first branch? if i make it <= i mean
-    else q
--/
-  def bSearch  (is : Array α) (target : α): SimpleS ℕ /- but maybe should be (Fin ((Nat.log2 is.size) + 1))-/ ℕ where
+   /-- A stream representing a binary search on an array. -/
+  def bSearch (is : Array α) (target : α): SimpleS α ℕ where
     σ := BSearchState α
-    q₀ := 
-      let upper := is.size - 1
-      ⟨mid 0 upper, is[mid 0 upper]!, 0, upper, 0⟩ 
-    index := fun q => q.searchIndex
-    value := fun q => q.arrInd
-    ready := fun q => q.arrVal == target
-    skip := fun q (i, r) => skip is target q i r
-
-
-end BSearch
+    q₀ :=  ⟨mid 0 (is.size - 1), is, target, 0, is.size - 1, false⟩ 
+    index q := q.target
+    value q := q.arrInd
+    ready q := q.found
+    skip q prod := skip' q prod.fst prod.snd
+    
 end BSearchSec
+
+def nextStep (x : SimpleS α β) (q : x.σ) (ir : α × Bool): x.σ := x.skip q ir
+def δ (x : SimpleS α β) (q : x.σ) := (x.skip q (x.index q, x.ready q))
+def arr1 : Array ℕ := #[0, 1, 2, 3, 4]
+def searchS1 : SimpleS ℕ ℕ := (bSearch #[0, 1, 2, 3, 4] 0)
+def searchS2 : SimpleS ℕ ℕ := (bSearch #[0, 1, 2, 3, 4] 2)
+def searchS3 : SimpleS ℕ ℕ := (bSearch #[0, 1, 2, 3, 4] 3)
+def step1 := δ searchS3 searchS3.q₀
+#eval step1
+def step2 := δ searchS3 step1
+#eval step2
+def step3 := δ searchS3 step2
+#eval step3
+def step4 := δ searchS3 step3
+#eval step4
+def step5 := δ searchS3 step4
+#eval step5
+
+
 
 
 instance {ι α} [Inhabited α] : Inhabited (ι →ₛ α) where
