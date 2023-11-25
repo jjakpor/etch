@@ -31,7 +31,12 @@ termination_by _ pair => pair.snd - pair.fst
 def mid'_spec_converse := ∀ p, mid' p = none → p.2 ≤ p.1 + 1
 
 theorem searchStep_lt_of_lt {pred pair between} (h : Proper pair) : Proper (searchStep pred pair between (m := m)) := by
-  sorry
+  unfold searchStep
+  split
+  . dsimp only [gt_iff_lt]
+    exact between.left -- why doesn't assumption work?
+  . dsimp only [gt_iff_lt]
+    exact between.right
 
 theorem adjacent (hmid : mid'_spec_converse mid') (pair : Pair) (lt : Proper pair) : ∃ n, binarySearch pred mid' pair = (n, n + 1) := by
   revert lt
@@ -40,8 +45,6 @@ theorem adjacent (hmid : mid'_spec_converse mid') (pair : Pair) (lt : Proper pai
   . exact this
   . rename_i pair h
     intro lt
-    have := h pair
-
-
-
+    have h' := h pair
+    apply h'
     sorry
