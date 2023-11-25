@@ -40,4 +40,8 @@ theorem adjacent (hmid : mid'_spec_converse mid') (pair : Pair) (lt : Proper pai
   . exact this
   . rename_i pair h
     intro lt
+    have := h pair
+
+
+
     sorry
