@@ -46,5 +46,24 @@ theorem adjacent (hmid : mid'_spec_converse mid') (pair : Pair) (lt : Proper pai
   . rename_i pair h
     intro lt
     have h' := h pair
-    apply h'
-    sorry
+    unfold binarySearch
+    split
+    . rename_i mid_is_none
+      have snd_le_fst : pair.2 ≤ pair.1 + 1 := hmid pair mid_is_none
+      unfold Proper at lt
+      use pair.fst
+      have lt_or_eq := Nat.eq_or_lt_of_le snd_le_fst
+      cases lt_or_eq
+      . rename_i snd_is_fst_succ
+        have :  pair = (pair.fst, pair.snd) := by simp
+        rw [snd_is_fst_succ] at this
+        assumption
+      . rename_i snd_lt_fst_succ
+        have snd_eq_fst : pair.fst = pair.snd := by
+          have snd_le_fst := Nat.le_of_lt_succ snd_lt_fst_succ
+          have := (@Nat.not_lt pair.fst pair.snd).mpr snd_le_fst
+          contradiction
+        have snd_ne_fst : pair.fst ≠ pair.snd := ne_of_lt lt
+        contradiction
+    . dsimp only
+      sorry
