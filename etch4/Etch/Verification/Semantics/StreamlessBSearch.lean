@@ -1,6 +1,7 @@
 import Mathlib.Order.Basic
 import Mathlib.Algebra.Ring.Basic
 import Mathlib.Tactic
+import Aesop
 
 abbrev Pair := ℕ × ℕ
 
@@ -31,12 +32,7 @@ termination_by _ pair => pair.snd - pair.fst
 def mid'_spec_converse := ∀ p, mid' p = none → p.2 ≤ p.1 + 1
 
 theorem searchStep_lt_of_lt {pred pair between} (h : Proper pair) : Proper (searchStep pred pair between (m := m)) := by
-  unfold searchStep
-  split
-  . dsimp only [gt_iff_lt]
-    exact between.left -- why doesn't assumption work?
-  . dsimp only [gt_iff_lt]
-    exact between.right
+  unfold searchStep; aesop
 
 theorem adjacent (hmid : mid'_spec_converse mid') (pair : Pair) (lt : Proper pair) : ∃ n, binarySearch pred mid' pair = (n, n + 1) := by
   revert lt
@@ -45,11 +41,10 @@ theorem adjacent (hmid : mid'_spec_converse mid') (pair : Pair) (lt : Proper pai
   . exact this
   . rename_i pair h
     intro lt
-    have h' := h pair
     unfold binarySearch
-    split
-    . rename_i mid_is_none
-      have snd_le_fst : pair.2 ≤ pair.1 + 1 := hmid pair mid_is_none
+    cases hm : mid' pair with
+    | none =>
+      have snd_le_fst : pair.2 ≤ pair.1 + 1 := hmid pair hm
       unfold Proper at lt
       use pair.fst
       have lt_or_eq := Nat.eq_or_lt_of_le snd_le_fst
@@ -65,5 +60,8 @@ theorem adjacent (hmid : mid'_spec_converse mid') (pair : Pair) (lt : Proper pai
           contradiction
         have snd_ne_fst : pair.fst ≠ pair.snd := ne_of_lt lt
         contradiction
-    . dsimp only
-      sorry
+    | some m =>
+      dsimp
+      apply h
+      . exact (searchStep pred pair m.property).property
+      . exact searchStep_lt_of_lt lt
