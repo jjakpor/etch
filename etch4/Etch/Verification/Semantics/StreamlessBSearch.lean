@@ -79,7 +79,7 @@ theorem invariant (inv : Invariant pred pair) : Invariant pred (binarySearch pre
   |
 -/
 
-
+-- theorem search_is_between (x : Pair) (in)
 
 def searchPred [LinearOrder α] (arr : List α) (target : α) (i : ℕ) : Bool :=
   match i with
@@ -113,13 +113,53 @@ def searchMid (p : Pair) : Option { m // Between p m } := if h : p.snd - p.fst >
     . sorry
   ⟩ else none
 
-def returnIndex [LinearOrder α] (arr : List α) (target : α) := (binarySearch (searchPred arr target) searchMid (0, arr.length + 1)).fst
+inductive SearchPosition
+| before
+| index (i : ℕ)
+| after
 
+def returnIndex [LinearOrder α] (arr : List α) (target : α) :=
+  (binarySearch (searchPred arr target) searchMid (0, arr.length + 1)).fst
+
+/-
+def searchPred [LinearOrder α] (arr : List α) (target : α) (i : ℕ) : Bool :=
+  match i with
+  | 0 => false
+  | i + 1 => if h: i < arr.length then arr[i]'h > target else true
+-/
+def returnIndex' [LinearOrder α] (arr : List α) (target : α) : SearchPosition :=
+  let encoded := (binarySearch (searchPred arr target) searchMid (0, arr.length + 1)).fst
+  match encoded with
+  | 0 => .before
+  | i + 1 => if i < arr.length then .index i else .after
+
+abbrev InBoundsEq' (arr : List α) (target : α)
+
+theorem Nat.pred_lt_of_le {n m : ℕ } (gt_zero : 0 < n) (h : n ≤ m) : n.pred < m := by
+  cases Nat.pred n with
+  | zero => calc
+      0 < n := gt_zero
+      n ≤ m := h
+  | succ x => sorry
+
+
+-- Consider using ∃n, j = n + 1
+/-
 @[mk_iff]
 structure InBoundsEq (arr : List α) (target : α) (j : ℕ) : Prop where
   gt_zero : 0 < j
-  lt_length : j < arr.length
-  eq : arr[j]'lt_length = target
+  lt_length : j ≤ arr.length -- j is in bou
+  eq : arr[j-1]'(by {apply Nat.pred_lt_of_le <;> assumption}) = target
+  -/
+
+abbrev InBoundsEq (arr : List α) (target : α) (j : ℕ) : Prop :=
+  0 < j ∧ j ≤ arr.length ∧ arr[j-1]'(by sorry) = target
+
+  /-
+  calc
+    j - 1 ≤ j := by simp
+    j ≤ arr.length := lt_length
+  -/
 
 #check InBoundsEq_iff
 -- Assuming return index is in bounds
@@ -133,6 +173,205 @@ theorem bsearch_finds_target_if_target_exists [LinearOrder α] (arr : List α) (
   . unfold returnIndex
     done
 -/
+
+abbrev Sorted [LinearOrder α] (arr : List α) : Prop :=
+  ∀(i j : Nat) (h : i < arr.length ∧ j < arr.length), arr[i]'h.left ≤ arr[j]'h.right
+
+variable [LinearOrder α] (arr : List α) (target : α)
+
+lemma inv_ret_pair : Invariant (searchPred arr target) (binarySearch (searchPred arr target) searchMid (0, List.length arr + 1)) := by
+  have inv_in : Invariant (searchPred arr target) (0, List.length arr + 1) := by
+    unfold Invariant
+    apply And.intro
+    . simp only [Bool.not_eq_true]
+      rfl
+    . unfold searchPred
+      simp only [Nat.add_eq, add_zero, lt_self_iff_false, List.getElem_eq_get, gt_iff_lt, dite_false]
+  exact @invariant (searchPred arr target) (searchMid) (0, List.length arr + 1) inv_in
+
+
+lemma not_search_pred_ret : ¬searchPred arr target (returnIndex arr target) := (inv_ret_pair arr target).left
+
+lemma search_pred_succ_ret : searchPred arr target (returnIndex arr target + 1) := by
+  unfold returnIndex
+  sorry
+  -- use adjacent
+
+
+
+lemma arr_at_succ_ret_gt_arr_at_target [LinearOrder α] (arr : List α) (target : α) : arr[(returnIndex arr target) + 1]'sorry > target := by
+  unfold returnIndex
+  dsimp only [gt_iff_lt]
+  sorry
+
+
+
+-- lemma not_eq_of_not_in_bounds_eq_in_bounds [LinearOrder α] (arr : List α) (target : α) (j : ℕ) :
+
+theorem  bsearch_finds_target_if_target_exists'' [LinearOrder α] (arr : List α) (target : α) : -- This is to try SearchPosition
+Sorted arr → (∃j, InBoundsEq arr target j)
+→ InBoundsEq arr target (returnIndex arr target) := by
+  intro sorted
+  contrapose
+  intro not_in_bounds_eq_result
+  rw [not_exists]
+  intro j
+  obtain j_in_bounds | j_not_in_bounds := Classical.em (j < arr.length)
+  . obtain j_lt_ret | j_eq_ret | ret_lt_j := Nat.lt_trichotomy j (returnIndex arr target)
+    . obtain ret_in_bounds | ret_not_in_bounds := Classical.em (returnIndex arr target < arr.length)
+      . unfold Sorted at sorted
+        have h : arr[j]'j_in_bounds ≤ arr[returnIndex arr target]'ret_in_bounds := sorted j (returnIndex arr target) ⟨j_in_bounds, ret_in_bounds⟩
+        have h' : arr[returnIndex arr target] ≠ target := sorry -- finish lemma above
+        have not_search_pred_ret := not_search_pred_ret arr target
+        /-
+        def searchPred [LinearOrder α] (arr : List α) (target : α) (i : ℕ) : Bool :=
+        match i with
+        | 0 => false
+        | i + 1 => if h: i < arr.length then arr[i]'h > target else true
+        -/
+        unfold InBoundsEq
+        rw [not_and_or]
+        right
+        rw [not_and_or]
+        right
+        -- oops, maybe off by one
+      . sorry
+    . conv in j => rw [j_eq_ret]
+      assumption
+    . have ret_in_bounds : (returnIndex arr target) + 1 ≤ arr.length :=
+        calc
+        returnIndex arr target ≤ j := Nat.le_of_lt ret_lt_j
+        j < List.length arr := j_in_bounds
+      unfold InBoundsEq
+      rw [not_and_or]
+      rw [not_and_or]
+      right
+      right
+      unfold InBoundsEq at not_in_bounds_eq_result
+      rw [not_and_or] at not_in_bounds_eq_result
+      rw [not_and_or] at not_in_bounds_eq_result
+      cases not_in_bounds_eq_result
+      . sorry
+      . rename_i not_in_bounds_or_not_eq
+        cases not_in_bounds_or_not_eq
+        . sorry -- calc proof here
+        . sorry
+  . sorry
+
+
+theorem  bsearch_finds_target_if_target_exists' [LinearOrder α] (arr : List α) (target : α) :
+Sorted arr → (∃j, InBoundsEq arr target j)
+→ InBoundsEq arr target (returnIndex arr target) := by
+  intro sorted
+  contrapose
+  intro not_in_bounds_eq_result
+  rw [not_exists]
+  intro j
+  obtain j_in_bounds | j_not_in_bounds := Classical.em (j < arr.length)
+  . obtain j_lt_ret | j_eq_ret | ret_lt_j := Nat.lt_trichotomy j (returnIndex arr target)
+    . obtain ret_in_bounds | ret_not_in_bounds := Classical.em (returnIndex arr target < arr.length)
+      . unfold Sorted at sorted
+        have h : arr[j]'j_in_bounds ≤ arr[returnIndex arr target]'ret_in_bounds := sorted j (returnIndex arr target) ⟨j_in_bounds, ret_in_bounds⟩
+        have h' : arr[returnIndex arr target] ≠ target := sorry -- finish lemma above
+        have not_search_pred_ret := not_search_pred_ret arr target
+        /-
+        def searchPred [LinearOrder α] (arr : List α) (target : α) (i : ℕ) : Bool :=
+        match i with
+        | 0 => false
+        | i + 1 => if h: i < arr.length then arr[i]'h > target else true
+        -/
+        unfold InBoundsEq
+        rw [not_and_or]
+        right
+        rw [not_and_or]
+        right
+        -- oops, maybe off by one
+      . sorry
+    . conv in j => rw [j_eq_ret]
+      assumption
+    . have ret_in_bounds : (returnIndex arr target) + 1 ≤ arr.length :=
+        calc
+        returnIndex arr target ≤ j := Nat.le_of_lt ret_lt_j
+        j < List.length arr := j_in_bounds
+      unfold InBoundsEq
+      rw [not_and_or]
+      rw [not_and_or]
+      right
+      right
+      unfold InBoundsEq at not_in_bounds_eq_result
+      rw [not_and_or] at not_in_bounds_eq_result
+      rw [not_and_or] at not_in_bounds_eq_result
+      cases not_in_bounds_eq_result
+      . sorry
+      . rename_i not_in_bounds_or_not_eq
+        cases not_in_bounds_or_not_eq
+        . sorry -- calc proof here
+        . sorry
+  . sorry
+
+
+
+
+/-
+  have j_lt_or_ge := Nat.lt_or_ge j (returnIndex arr target)
+  cases j_lt_or_ge
+  . sorry
+  . rename_i j_ge_ret
+    have eq_or_gt : (returnIndex arr target) = j ∨ j > (returnIndex arr target)    :=
+      @Nat.eq_or_lt_of_le (returnIndex arr target) j j_ge_ret
+    cases eq_or_gt
+    . rename_i j_eq_ret
+      conv in j => rw [←j_eq_ret]
+      assumption
+    . rename j_gt_ret
+      have j_gt_succ_ret : j > (returnIndex arr target) + 1 := sorry
+-/
+
+
+
+
+  -- Split into cases
+  -- Blueprint=
+/-
+  intro sorted in_bounds_eq_tgt
+  constructor
+  . unfold returnIndex -- use Between
+    sorry
+  . sorry
+  . by_contra exists_neg
+    have inBoundsResult : returnIndex arr target < List.length arr := sorry
+    have arr_ret_index_gt_or_lt_target : arr[returnIndex arr target] > target ∨ arr[returnIndex arr target] < target := sorry
+    cases arr_ret_index_gt_or_lt_target
+    . sorry
+    . sorry
+    -/
+/-
+TODO:
+1. blueprint
+2. Make off-by-one impossible (w/ different type, access function)
+3. Introduce very obvious lemmas
+4. maybe consider cases on the predicate?
+5. contrapose instead of intro?
+
+-/
+
+
+  /-
+  by_contra not_in_bounds_eq_result
+  simp only [InBoundsEq_iff] at in_bounds_eq_tgt
+  simp only [InBoundsEq_iff, not_and] at not_in_bounds_eq_result
+  unfold returnIndex at not_in_bounds_eq_result
+  -/
+  -- Sorry, got stuck messing with definitions
+  /- But basically, if the returned index is wrong
+    1. The target is to the right, but impossible because invariant and sorted
+    2. or the target is the thing or to the left, impossible because of invariant and sorted
+  -/
+
+
+
+
+
 
 -- ∃(j : ℕ) (h : (InBoundsEq arr target j)), arr[j]'h.inBounds.right = target
 theorem  bsearch_finds_target_if_target_exists [LinearOrder α] (arr : List α) (target : α) :
