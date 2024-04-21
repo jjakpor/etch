@@ -104,19 +104,88 @@ inductive SearchPosition
 def returnIndex [LinearOrder α] (arr : List α) (target : α) :=
   (binarySearch (searchPred arr target) searchMid (0, arr.length + 1)).fst
 
+
 /-
 def searchPred [LinearOrder α] (arr : List α) (target : α) (i : ℕ) : Bool :=
   match i with
   | 0 => false
   | i + 1 => if h: i < arr.length then arr[i]'h > target else true
 -/
-def returnIndex' [LinearOrder α] (arr : List α) (target : α) : SearchPosition :=
+
+variable [LinearOrder α] (arr : List α) (target : α)
+
+def returnIndex' : SearchPosition :=
   let encoded := (binarySearch (searchPred arr target) searchMid (0, arr.length + 1)).fst
   match encoded with
   | 0 => .before
   | i + 1 => if i < arr.length then .index i else .after
 
-abbrev InBoundsEq' (arr : List α) (target : α)
+lemma eq_arg (h: SearchPosition.index a = SearchPosition.index b) : b = a := sorry -- How do I prove this? This seems very basic
+
+lemma index_i_imp_i_lt_length (ret_index_is_index : returnIndex' arr target = .index i) : i < arr.length := by
+  unfold returnIndex' at ret_index_is_index
+  simp at ret_index_is_index
+  split at ret_index_is_index
+  case h_1 j _ => contradiction
+  case h_2 j _ =>
+    split at ret_index_is_index
+    case inl h' => exact calc
+      i = j := eq_arg ret_index_is_index
+      j < arr.length := h'
+    case inr h' => contradiction
+    /- I tried the following before, but I needed to be able to name j:
+      repeat' split at ret_index_is_index
+      repeat' contradiction
+    -/
+  done
+
+#check (searchPred arr target)
+
+lemma inv_true_at_start : Invariant (searchPred arr target) (0, List.length arr + 1) := by
+  apply And.intro
+  . unfold searchPred
+    simp
+  . unfold searchPred
+    simp
+  done
+
+#check (inv_true_at_start arr target).left
+lemma index_i_imp_arr_i_le_target (ret_index_is_index : returnIndex' arr target = .index i) : arr[i]'(index_i_imp_i_lt_length arr target ret_index_is_index) ≤ target := by
+  unfold returnIndex' at ret_index_is_index
+  simp at ret_index_is_index
+  have i_lt_length : i < arr.length := index_i_imp_i_lt_length _ _ ret_index_is_index
+  have false_on_fst : ¬searchPred arr target (binarySearch _ _ (0, List.length arr + 1)).fst := (invariant _ searchMid (inv_true_at_start _ _)).left
+  simp at false_on_fst
+  unfold searchPred at false_on_fst
+  split at false_on_fst
+  case h_1 j eq_zero => -- Don't know how to work with the lambdas
+    sorry
+  case h_2 j k eq_succ => sorry
+
+
+
+
+
+
+
+
+  -- This is just because the searchPred is always false on the first element, and we can walk through the cases in which it must be false
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+-- abbrev InBoundsEq' (arr : List α) (target : α)
 
 theorem Nat.pred_lt_of_le {n m : ℕ } (gt_zero : 0 < n) (h : n ≤ m) : n.pred < m := by
   cases Nat.pred n with
