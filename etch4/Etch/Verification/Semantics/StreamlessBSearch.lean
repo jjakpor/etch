@@ -73,7 +73,7 @@ theorem invariant (inv : Invariant pred pair) : Invariant pred (binarySearch pre
 def searchPred [LinearOrder α] (arr : List α) (target : α) (i : ℕ) : Bool :=
   match i with
   | 0 => false
-  | i + 1 => if h: i < arr.length then arr[i]'h > target else true
+  | j + 1 => if h: j < arr.length then arr[j]'h > target else true
 
 
 lemma sum_div {a b c : ℕ} : a/c + b/c ≤ (a + b) / c  := sorry -- TODO: find in mathlib or prove manually (as an exercise)
@@ -120,7 +120,8 @@ def returnIndex' : SearchPosition :=
   | 0 => .before
   | i + 1 => if i < arr.length then .index i else .after
 
-lemma eq_arg (h: SearchPosition.index a = SearchPosition.index b) : b = a := sorry -- How do I prove this? This seems very basic
+lemma eq_arg (h: SearchPosition.index a = SearchPosition.index b) : b = a := by cases h; rfl
+#print eq_arg
 
 lemma index_i_imp_i_lt_length (ret_index_is_index : returnIndex' arr target = .index i) : i < arr.length := by
   unfold returnIndex' at ret_index_is_index
@@ -143,35 +144,27 @@ lemma index_i_imp_i_lt_length (ret_index_is_index : returnIndex' arr target = .i
 
 lemma inv_true_at_start : Invariant (searchPred arr target) (0, List.length arr + 1) := by
   apply And.intro
-  . unfold searchPred
-    simp
-  . unfold searchPred
-    simp
+  repeat (unfold searchPred; simp)
   done
 
 #check (inv_true_at_start arr target).left
 lemma index_i_imp_arr_i_le_target (ret_index_is_index : returnIndex' arr target = .index i) : arr[i]'(index_i_imp_i_lt_length arr target ret_index_is_index) ≤ target := by
   unfold returnIndex' at ret_index_is_index
   simp at ret_index_is_index
-  have i_lt_length : i < arr.length := index_i_imp_i_lt_length _ _ ret_index_is_index
   have false_on_fst : ¬searchPred arr target (binarySearch _ _ (0, List.length arr + 1)).fst := (invariant _ searchMid (inv_true_at_start _ _)).left
-  simp at false_on_fst
-  unfold searchPred at false_on_fst
-  split at false_on_fst
-  case h_1 j eq_zero => -- Don't know how to work with the lambdas
-    sorry
-  case h_2 j k eq_succ => sorry
-
-
-
-
-
-
-
-
-  -- This is just because the searchPred is always false on the first element, and we can walk through the cases in which it must be false
-
-
+  have h : i + 1 = (binarySearch (searchPred arr target) searchMid (0, List.length arr + 1)).fst := by
+    split at ret_index_is_index
+    . contradiction
+    . split at ret_index_is_index
+      . cases ret_index_is_index
+        simp [*]
+      . contradiction
+  -- The predicate is false on i + 1. if i < arr.length, searchPred is only false on i + 1 if ¬(arr[i] > target)
+  rw [←h] at false_on_fst
+  simp [searchPred] at false_on_fst
+  cases false_on_fst
+  assumption
+  done
 
 
 
@@ -230,9 +223,65 @@ lemma arr_at_succ_ret_gt_arr_at_target [LinearOrder α] (arr : List α) (target 
   sorry
 
 
+def containsTargetAt (arr : List α) (target : α) (i : ℕ) : Prop :=
+  ∃ (hi : i < arr.length), arr[i]'hi = target
+
+def containsTarget (arr : List α) (target : α) : Prop :=
+  ∃ (i : ℕ), containsTargetAt arr target i
+
+example : returnIndex' arr target = .before → ∀(h: i < arr.length), target < arr[i]'h := sorry
+
+
+theorem bsearch_finds_target_if_target_exists [LinearOrder α] (arr : List α) (target : α)
+    (sorted : Sorted arr) (contains : containsTarget arr target) :
+    ∃j, containsTargetAt arr target j ∧ returnIndex' arr target = .index j := by
+    revert contains
+    contrapose
+    intro h
+    simp only [not_exists] at h
+    unfold containsTarget
+    simp
+    intro i
+
+    have not_at_i_or_not_index := h i
+    rw [not_and_or] at not_at_i_or_not_index
+    cases not_at_i_or_not_index
+    . assumption
+    . rename_i not_index
+      by_cases 0 < arr.length
+      . sorry
+      . sorry
+    done
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/- theorem bsearch_finds_target_if_target_exists [LinearOrder α] (arr : List α) (target : α) :
+  Sorted arr → (∃i < arr.length, arr[i]'sorry = target) → ∃j, (returnIndex' arr target = .index j ∧ arr[j]'sorry = target) := by
+  -- actually just need to show arr[j] is not less than target
+  sorry
+  -/
+
 
 -- lemma not_eq_of_not_in_bounds_eq_in_bounds [LinearOrder α] (arr : List α) (target : α) (j : ℕ) :
 
+example (list : List α) (x : α) : ∃i, list[i] = x → ∃i, list[i] = x := sorry
+
+
+/-
 theorem  bsearch_finds_target_if_target_exists' [LinearOrder α] (arr : List α) (target : α) : -- This is to try SearchPosition
 Sorted arr → (∃j, InBoundsEq arr target j)
 → InBoundsEq arr target (returnIndex arr target) := by
@@ -282,7 +331,7 @@ Sorted arr → (∃j, InBoundsEq arr target j)
         . sorry -- calc proof here
         . sorry
   . sorry
-
+-/
 
 theorem  bsearch_finds_target_if_target_exists [LinearOrder α] (arr : List α) (target : α) :
 Sorted arr → (∃j, InBoundsEq arr target j)
@@ -333,3 +382,5 @@ Sorted arr → (∃j, InBoundsEq arr target j)
         . sorry -- calc proof here
         . sorry
   . sorry
+
+#check SearchPosition.noConfusion -- Don't actually use noConfusion lol
